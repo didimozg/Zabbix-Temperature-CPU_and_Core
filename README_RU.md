@@ -1,6 +1,6 @@
 # 🌡️ Zabbix Basic CPU Temperature Monitoring
 
-![Zabbix Version](https://img.shields.io/badge/Zabbix-7.0%2B-blue) ![Agent](https://img.shields.io/badge/Zabbix_Agent-2-green) ![License](https://img.shields.io/badge/License-MIT-grey)
+![Zabbix Version](https://img.shields.io/badge/Zabbix-7.0%2B-blue) ![Agent](https://img.shields.io/badge/Zabbix_Agent-2-green) ![License](https://img.shields.io/badge/License-GPLv3-blue)
 
 Легковесный и оптимизированный шаблон для мониторинга температуры процессора в Zabbix.
 Решение использует нативные возможности `lm-sensors` и минимум внешних скриптов (One-liners).
