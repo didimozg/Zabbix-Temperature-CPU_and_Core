@@ -125,8 +125,6 @@ zabbix_get -s <TARGET_IP> -k basicCPUTemp.avg
 
 ### 📦 Файл шаблона: `template_cpu_temp_v7.yaml`
 
-Это финальная версия файла (100% валидный формат Zabbix 7.4). Положите его рядом с README.
-
 ```yaml
 zabbix_export:
   version: '7.4'
