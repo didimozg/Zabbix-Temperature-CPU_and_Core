@@ -1,26 +1,57 @@
+# Zabbix Basic CPU Temperature Monitoring
 
-## 🛠️ Мониторинг температуры CPU для Zabbix 7.4+ (One-Liner Edition)
+Простой и эффективный шаблон для мониторинга температуры процессора (поядерно + общая статистика) с использованием `lm-sensors` и Zabbix Agent.
 
-Это решение позволяет мониторить температуру каждого ядра процессора, а также среднюю, минимальную и максимальную температуру.
-Использует нативные `UserParameter` с awk-парсером, минимизируя количество внешних скриптов.
+Особенность этой версии — использование **UserParameters (One-liners)** для сбора метрик, что минимизирует количество внешних скриптов. Внешний скрипт используется только для Discovery (LLD).
 
-**Автор идеи:** [B1T0 Tobias Scheithauer ](https://github.com/B1T0/zabbix-basic-cpu-temperature?tab=readme-ov-file)
-**Адаптация:** *[didimozg]*
+## Credits / Авторы
 
-### Шаг 1: Подготовка (lm-sensors)
+* **Автор идеи / Original Idea:** [B1T0 (Tobias Scheithauer)](https://github.com/B1T0/zabbix-basic-cpu-temperature)
+* **Адаптация и рефакторинг / Adaptation:** [didimozg](https://github.com/didimozg)
 
-Установите пакет для работы с сенсорами:
+## Возможности
+
+* 🔥 **Discovery:** Автоматическое обнаружение всех ядер CPU.
+* 📊 **Метрики:**
+    * Температура каждого ядра.
+    * Средняя температура (Avg).
+    * Максимальная температура (Max).
+    * Минимальная температура (Min).
+* ⚠️ **Триггеры:** Предупреждения о перегреве (>85°C) и критическом состоянии (>95°C).
+* 📈 **Графики:** Визуализация мин/сред/макс температуры.
+* ✅ **Совместимость:** Zabbix 7.0+, Zabbix Agent / Agent 2.
+
+---
+
+## Установка
+
+### Шаг 1: Установка зависимостей (Linux)
+
+На целевом хосте необходимо установить пакет `lm-sensors` и утилиты для парсинга.
 
 ```bash
 sudo apt update
 sudo apt install lm-sensors gawk -y
-sudo sensors-detect  # Отвечайте YES на все вопросы
 
 ```
 
-### Шаг 2: Скрипт обнаружения ядер (Discovery)
+Запустите детектирование сенсоров и ответьте `YES` на все вопросы:
 
-Так как Zabbix требует JSON для LLD (Low Level Discovery), нам понадобится один маленький скрипт только для того, чтобы найти список ядер.
+```bash
+sudo sensors-detect
+
+```
+
+Проверьте работу команды:
+
+```bash
+sensors
+
+```
+
+### Шаг 2: Скрипт обнаружения (Discovery)
+
+Zabbix требует JSON формат для низкоуровневого обнаружения (LLD). Для этого создадим небольшой скрипт.
 
 1. Создайте файл:
 ```bash
@@ -29,14 +60,15 @@ sudo nano /etc/zabbix/zabbix_agent2.d/get_cores.sh
 ```
 
 
-2. Вставьте код (генерирует JSON со списком ядер):
+*(Если используете старый zabbix-agent, путь будет `/etc/zabbix/scripts/`)*
+2. Вставьте содержимое:
 ```bash
 #!/bin/bash
-# Вывод JSON списка ядер для Zabbix LLD
+# JSON Generator for Zabbix CPU Core Discovery
 first=1
 echo "{\"data\":["
 sensors | grep "^Core" | while read -r line; do
-    # Извлекаем номер ядра (Core 0, Core 1...)
+    # Extract core ID (assuming format "Core 0", "Core 1")
     core_id=$(echo "$line" | awk '{print $2}' | tr -d ':')
 
     if [ "$first" -eq 0 ]; then echo ","; fi
@@ -48,7 +80,7 @@ echo "]}"
 ```
 
 
-3. Дайте права на выполнение:
+3. Сделайте файл исполняемым:
 ```bash
 sudo chmod +x /etc/zabbix/zabbix_agent2.d/get_cores.sh
 
@@ -56,39 +88,34 @@ sudo chmod +x /etc/zabbix/zabbix_agent2.d/get_cores.sh
 
 
 
-### Шаг 3: Конфигурация Zabbix Agent
+### Шаг 3: Настройка Zabbix Agent
 
-Создаем файл с пользовательскими параметрами (используем ваши awk-однострочники).
-
-1. Создайте файл конфига:
+1. Создайте файл конфигурации:
 ```bash
 sudo nano /etc/zabbix/zabbix_agent2.d/userparameter_cputemp.conf
 
 ```
 
 
-2. Вставьте туда содержимое:
-
+2. Вставьте следующие параметры (One-liners):
 ```ini
-# --- CPU Temperature Monitoring Parameters ---
-
 # Discovery script location
 UserParameter=basicCPUTemp.discovery,/etc/zabbix/zabbix_agent2.d/get_cores.sh
 
-# Min core temp (°C) - Iterates all cores to find min
+# Min core temp (°C)
 UserParameter=basicCPUTemp.min,LC_ALL=C sensors 2>/dev/null | awk '/^Core [0-9]+:/ { s=$0; sub(/^.*: */, "", s); if (match(s, /[-+]?[0-9]+(\.[0-9]+)?/)) { t=substr(s,RSTART,RLENGTH)+0; if (c==0||t<min) min=t; c++ } } END{ if (c>0) printf("%.1f", min); else print "-1" }'
 
-# Max core temp (°C) - Iterates all cores to find max
+# Max core temp (°C)
 UserParameter=basicCPUTemp.max,LC_ALL=C sensors 2>/dev/null | awk '/^Core [0-9]+:/ { s=$0; sub(/^.*: */, "", s); if (match(s, /[-+]?[0-9]+(\.[0-9]+)?/)) { t=substr(s,RSTART,RLENGTH)+0; if (c==0||t>max) max=t; c++ } } END{ if (c>0) printf("%.1f", max); else print "-1" }'
 
-# Avg core temp (°C) - Calculates average across all cores
+# Avg core temp (°C)
 UserParameter=basicCPUTemp.avg,LC_ALL=C sensors 2>/dev/null | awk '/^Core [0-9]+:/ { s=$0; sub(/^.*: */, "", s); if (match(s, /[-+]?[0-9]+(\.[0-9]+)?/)) { sum+=substr(s,RSTART,RLENGTH)+0; c++ } } END{ if (c>0) printf("%.1f", sum/c); else print "-1" }'
 
-# Specific core temp (Usage: basicCPUTemp.core[0], basicCPUTemp.core[1] ...)
-# Note: $1 inside grep is the argument passed from Zabbix key (0, 1, etc)
+# Specific core temp
 UserParameter=basicCPUTemp.core[*],LC_ALL=C sensors 2>/dev/null | grep "^Core $1:" | awk '{print $3}' | sed 's/[^0-9.]//g'
 
 ```
+
 
 3. Перезапустите агент:
 ```bash
@@ -98,11 +125,24 @@ sudo systemctl restart zabbix-agent2
 
 
 
-### Шаг 4: Импорт шаблона (YAML)
+### Шаг 4: Импорт шаблона
 
-Этот шаблон полностью совместим с конфигом выше. (Валидные UUIDv4, Zabbix 7.4).
+1. Скачайте файл `template_cpu_temp_v7.yaml` из этого репозитория.
+2. В Zabbix перейдите в **Data collection** -> **Templates**.
+3. Нажмите **Import** и выберите скачанный файл.
+4. Примените шаблон к нужному хосту.
 
-Сохраните как `template_cpu_temp_v7_final.yaml`.
+---
+
+**License:** MIT / GPL (as per original repo)
+
+```
+
+---
+
+### 📄 Файл 2: `template_cpu_temp_v7.yaml`
+
+Это сам файл шаблона для репозитория (с правильными UUIDv4).
 
 ```yaml
 zabbix_export:
@@ -118,8 +158,8 @@ zabbix_export:
         Template for monitoring CPU Temperature using lm-sensors.
         Uses optimized awk one-liners in agent config.
         
-        Original idea: https://github.com/didimozg
-        Updated for Zabbix 7.4 with UUIDv4 fixes.
+        Original idea: https://github.com/B1T0/zabbix-basic-cpu-temperature
+        Adaptation: https://github.com/didimozg
       groups:
         - name: Templates
       items:
@@ -213,4 +253,3 @@ zabbix_export:
             host: 'Template basicCPUTemp'
             key: basicCPUTemp.max
 
-```
