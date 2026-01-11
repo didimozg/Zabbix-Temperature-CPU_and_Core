@@ -130,8 +130,6 @@ zabbix_get -s <TARGET_IP> -k basicCPUTemp.avg
 
 ### 📦 Template File: `template_cpu_temp_v7.yaml`
 
-Save this file. It contains the correct UUIDs and English descriptions.
-
 ```yaml
 zabbix_export:
   version: '7.4'
